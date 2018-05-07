@@ -1,0 +1,17 @@
+{
+    "name": "testing",
+    "authors": [
+        "Eduard Staniloiu"
+    ],
+    "dependencies": {
+        "derelict-sdl2": "~>3.0.0",
+        "derelict-gl3": "~>2.0.0-beta"
+    },
+    "libs": [
+        "sdl2"
+    ],
+    "versions": ["DerelictSDL2_Static"],
+    "description": "A minimal D application.",
+    "copyright": "Copyright © 2018, Eduard Staniloiu",
+    "license": "proprietary"
+}
