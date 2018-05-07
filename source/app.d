@@ -61,10 +61,11 @@ struct GameState
 
     vec2f ballPos = 0.;
     vec2f ballSpeed = 0.4;
+    float ballSize = 0.01;
 
     float[numPlayers] racketYCenter = [0, 0];
     float[numPlayers] racketXPosition = [-0.9, 0.9];
-    float[numPlayers] racketHalfLength = [0.01, 0.01];
+    float[numPlayers] racketHalfLength = [0.1, 0.1];
     float[numPlayers] racketHalfWidth = [0.01, 0.01];
 
     float[numPlayers] racketSpeed = [0.5, 0.5];
@@ -75,10 +76,9 @@ enum PlayerOne = 0;
 enum PlayerTwo = 1;
 GameState state;
 
-void display(ref SDL_Window *screen, FpsCounter fps, ref GameState state)
+void display(ref SDL_Window *screen, ref GameState state)
 {
     bool end = true;
-
 
     // ****** DISPLAY PART ******
     // Clear screen
@@ -88,12 +88,15 @@ void display(ref SDL_Window *screen, FpsCounter fps, ref GameState state)
     glPushMatrix();
 
     glColor3f(1., 1., 1.);
-    glTranslated(-0.9, state.racketYCenter[0], 0.0);
+    glTranslated(state.racketXPosition[0], state.racketYCenter[0], 0.0);
     glBegin(GL_TRIANGLE_STRIP);
-    glVertex3d(-0.01, -0.1, 0.0);
-    glVertex3d(-0.01,  0.1, 0.0);
-    glVertex3d( 0.01, -0.1, 0.0);
-    glVertex3d( 0.01,  0.1, 0.0);
+
+    auto halfLength = state.racketHalfLength[0];
+    auto halfWidth = state.racketHalfWidth[0];
+    glVertex3d(-halfWidth, -halfLength, 0.0);
+    glVertex3d(-halfWidth, halfLength, 0.0);
+    glVertex3d(halfWidth, -halfLength, 0.0);
+    glVertex3d(halfWidth, halfLength, 0.0);
     glEnd();
 
     glPopMatrix();
@@ -101,12 +104,15 @@ void display(ref SDL_Window *screen, FpsCounter fps, ref GameState state)
     // Display second player
     glPushMatrix();
 
-    glTranslated( 0.9, state.racketYCenter[1], 0.0);
+    glTranslated(state.racketXPosition[1], state.racketYCenter[1], 0.0);
     glBegin(GL_TRIANGLE_STRIP);
-    glVertex3d(-0.01, -0.1, 0.0);
-    glVertex3d(-0.01,  0.1, 0.0);
-    glVertex3d( 0.01, -0.1, 0.0);
-    glVertex3d( 0.01,  0.1, 0.0);
+
+    halfLength = state.racketHalfLength[1];
+    halfWidth = state.racketHalfWidth[1];
+    glVertex3d(-halfWidth, -halfLength, 0.0);
+    glVertex3d(-halfWidth, halfLength, 0.0);
+    glVertex3d(halfWidth, -halfLength, 0.0);
+    glVertex3d(halfWidth, halfLength, 0.0);
     glEnd();
 
     glPopMatrix();
@@ -115,179 +121,21 @@ void display(ref SDL_Window *screen, FpsCounter fps, ref GameState state)
     glPushMatrix();
 
     glColor3f(1., 1., 0.);
-    glTranslated( state.ballPos[0], state.ballPos[1], 0.0);
+    glTranslated(state.ballPos[0], state.ballPos[1], 0.0);
     glBegin(GL_TRIANGLE_STRIP);
-    glVertex3d(-0.01, -0.01 * 16 / 9, 0.0);
-    glVertex3d(-0.01,  0.01 * 16 / 9, 0.0);
-    glVertex3d( 0.01, -0.01 * 16 / 9, 0.0);
-    glVertex3d( 0.01,  0.01 * 16 / 9, 0.0);
+
+    auto ballSize = state.ballSize;
+    glVertex3d(-ballSize, -ballSize, 0.0);
+    glVertex3d(-ballSize, ballSize, 0.0);
+    glVertex3d(ballSize, -ballSize, 0.0);
+    glVertex3d(ballSize, ballSize, 0.0);
     glColor3f(1., 1., 1.);
     glEnd();
 
     glPopMatrix();
 
-    float x = -0.8;
-    float y = -0.8;
-    DrawNumber(fps.get(), x, y);
-
     // Swap buffers
     SDL_GL_SwapWindow(screen);
-}
-
-void DrawOne()
-{
-    glBegin(GL_LINE_STRIP);
-    glVertex3d( 0.0, -0.1, 0.0); glVertex3d( 0.0,  0.1, 0.0);
-    glEnd();
-}
-
-void DrawTwo()
-{
-    glBegin(GL_LINE_STRIP);
-    glVertex3d( 0.1, -0.1, 0.0); glVertex3d(-0.1, -0.1, 0.0); glVertex3d(-0.1,  0.0, 0.0);
-    glVertex3d( 0.1,  0.0, 0.0); glVertex3d( 0.1,  0.1, 0.0); glVertex3d(-0.1,  0.1, 0.0);
-    glEnd();
-}
-
-void DrawThree()
-{
-    glBegin(GL_LINE_STRIP);
-    glVertex3d(-0.1, -0.1, 0.0); glVertex3d( 0.1, -0.1, 0.0); glVertex3d( 0.1,  0.0, 0.0);
-    glVertex3d(-0.1,  0.0, 0.0);
-    glVertex3d( 0.1,  0.0, 0.0); glVertex3d( 0.1,  0.1, 0.0); glVertex3d(-0.1,  0.1, 0.0);
-    glEnd();
-}
-
-void DrawFour()
-{
-    glBegin(GL_LINE_STRIP);
-    glVertex3d(-0.1,  0.1, 0.0); glVertex3d(-0.1,  0.0, 0.0); glVertex3d( 0.1,  0.0, 0.0);
-    glVertex3d( 0.1,  0.1, 0.0); glVertex3d( 0.1, -0.1, 0.0);
-    glEnd();
-}
-
-void DrawFive()
-{
-    glPushMatrix();
-    glScaled(-1.0, 1.0, 1.0);
-    DrawTwo();
-    glPopMatrix();
-}
-
-void DrawSix()
-{
-    glBegin(GL_LINE_STRIP);
-    glVertex3d(-0.1,  0.1, 0.0); glVertex3d(-0.1, -0.1, 0.0); glVertex3d( 0.1, -0.1, 0.0);
-    glVertex3d( 0.1,  0.0, 0.0); glVertex3d(-0.1,  0.0, 0.0);
-    glEnd();
-}
-
-void DrawSeven()
-{
-    glBegin(GL_LINE_STRIP);
-    glVertex3d(-0.1,  0.1, 0.0); glVertex3d( 0.1,  0.1, 0.0); glVertex3d( 0.1, -0.1, 0.0);
-    glEnd();
-}
-
-void DrawHeight()
-{
-    DrawTwo();
-    DrawFive();
-}
-
-void DrawNine()
-{
-    glPushMatrix();
-    glScaled(-1.0,-1.0, 1.0);
-    DrawSix();
-    glPopMatrix();
-}
-
-void DrawZero()
-{
-    glBegin(GL_LINE_STRIP);
-    glVertex3d(-0.1,  0.1, 0.0); glVertex3d( 0.1,  0.1, 0.0); glVertex3d( 0.1, -0.1, 0.0);
-    glVertex3d(-0.1, -0.1, 0.0); glVertex3d(-0.1,  0.1, 0.0);
-    glEnd();
-}
-
-void DrawDigit(char _digit)
-{
-    switch(_digit)
-    {
-    case 0: DrawZero();
-        break;
-    case 1: DrawOne();
-        break;
-    case 2: DrawTwo();
-        break;
-    case 3: DrawThree();
-        break;
-    case 4: DrawFour();
-        break;
-    case 5: DrawFive();
-        break;
-    case 6: DrawSix();
-        break;
-    case 7: DrawSeven();
-        break;
-    case 8: DrawHeight();
-        break;
-    case 9: DrawNine();
-        break;
-    default:
-        break;
-    }
-}
-
-void DrawNumber(int _number, float _x, float _y)
-{
-    import std.math : log10;
-
-    _x += log10(cast(double)_number) * 0.24;
-
-    while (_number != 0)
-    {
-        char digit = cast(char) (_number % 10);
-
-        glPushMatrix();
-        glTranslated(_x, _y, 0.0);
-        DrawDigit(digit);
-        glPopMatrix();
-
-        _number /= 10;
-        _x -= 0.24;
-    }
-}
-
-class FpsCounter
-{
-    private int m_prevTick;
-    private int[] m_fps = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-    private int m_fpsIndex = 0;
-
-    this()
-    {
-        m_prevTick = SDL_GetTicks();
-    }
-
-    int get()
-    {
-        import std.algorithm.iteration : sum;
-
-        int currentTick = SDL_GetTicks();
-        float dt = cast(float)(currentTick - m_prevTick) / 1000.;
-        m_prevTick = currentTick;
-
-        if (dt != 0.)
-        {
-            int cfps = cast(int) (1. / dt);
-            m_fps[m_fpsIndex++] = cfps;
-            m_fpsIndex %= 10;
-            return sum(m_fps) / 10;
-        }
-        return 0;
-    }
 }
 
 import std.stdio;
@@ -321,7 +169,7 @@ void checkCollisons(ref GameState state)
 
     if (state.ballSpeed[0] < 0)
     {
-        if (state.ballPos[0] <= state.racketXPosition[0] + state.racketHalfLength[0] &&
+        if (state.ballPos[0] <= state.racketXPosition[0] + state.racketHalfWidth[0] &&
             fabs(state.ballPos[1] - state.racketYCenter[0]) < state.racketHalfLength[0])
         {
             state.ballSpeed[0] *= -1;
@@ -330,8 +178,7 @@ void checkCollisons(ref GameState state)
 
     if (state.ballSpeed[0] > 0)
     {
-        writeln(state.ballPos[0]);
-        if (state.ballPos[0] >= state.racketXPosition[1] - state.racketHalfLength[1] &&
+        if (state.ballPos[0] >= state.racketXPosition[1] - state.racketHalfWidth[1] &&
             fabs(state.ballPos[1] - state.racketYCenter[1]) < state.racketHalfLength[1])
         {
             state.ballSpeed[0] *= -1;
@@ -363,7 +210,6 @@ void main() {
     InitSDL(screen, context);
 
     bool end = false;
-    auto fps = new FpsCounter();
     while(!end)
     {
         auto currentTicks = SDL_GetTicks();
@@ -371,7 +217,7 @@ void main() {
         prevTicks = currentTicks;
 
         updateGameplay(state, dt);
-        display(screen, fps, state);
+        display(screen, state);
 
         // Check events
         SDL_Event event;
