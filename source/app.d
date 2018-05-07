@@ -23,8 +23,6 @@ mixin glDecls!(maxGLVersion, supportDeprecated);
 
 alias vec2f = float[2];
 
-enum Player { One, Two }
-
 void InitSDL(ref SDL_Window *screen, ref SDL_GLContext context)
 {
     DerelictGL3.load();
@@ -65,8 +63,8 @@ struct GameState
 
     float[numPlayers] racketYCenter = [0, 0];
     float[numPlayers] racketXPosition = [-0.9, 0.9];
-    float[numPlayers] racketHalfLength = [0.1, 0.1];
-    float[numPlayers] racketHalfWidth = [0.01, 0.01];
+    float[numPlayers] racketHalfLength = [0.3, 0.1];
+    float[numPlayers] racketHalfWidth = [0.03, 0.01];
 
     float[numPlayers] racketSpeed = [0.5, 0.5];
     float[2] limits = [-1, 1];
@@ -74,25 +72,21 @@ struct GameState
 
 enum PlayerOne = 0;
 enum PlayerTwo = 1;
+enum X = 0;
+enum Y = 1;
+
 GameState state;
 
-void display(ref SDL_Window *screen, ref GameState state)
+void drawPlayer(int player, ref GameState state)
 {
-    bool end = true;
-
-    // ****** DISPLAY PART ******
-    // Clear screen
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    // Display first player
     glPushMatrix();
 
     glColor3f(1., 1., 1.);
-    glTranslated(state.racketXPosition[0], state.racketYCenter[0], 0.0);
+    glTranslated(state.racketXPosition[player], state.racketYCenter[player], 0.0);
     glBegin(GL_TRIANGLE_STRIP);
 
-    auto halfLength = state.racketHalfLength[0];
-    auto halfWidth = state.racketHalfWidth[0];
+    auto halfLength = state.racketHalfLength[player];
+    auto halfWidth = state.racketHalfWidth[player];
     glVertex3d(-halfWidth, -halfLength, 0.0);
     glVertex3d(-halfWidth, halfLength, 0.0);
     glVertex3d(halfWidth, -halfLength, 0.0);
@@ -100,24 +94,10 @@ void display(ref SDL_Window *screen, ref GameState state)
     glEnd();
 
     glPopMatrix();
+}
 
-    // Display second player
-    glPushMatrix();
-
-    glTranslated(state.racketXPosition[1], state.racketYCenter[1], 0.0);
-    glBegin(GL_TRIANGLE_STRIP);
-
-    halfLength = state.racketHalfLength[1];
-    halfWidth = state.racketHalfWidth[1];
-    glVertex3d(-halfWidth, -halfLength, 0.0);
-    glVertex3d(-halfWidth, halfLength, 0.0);
-    glVertex3d(halfWidth, -halfLength, 0.0);
-    glVertex3d(halfWidth, halfLength, 0.0);
-    glEnd();
-
-    glPopMatrix();
-
-    // Display ball
+void drawBall(ref GameState state)
+{
     glPushMatrix();
 
     glColor3f(1., 1., 0.);
@@ -133,6 +113,17 @@ void display(ref SDL_Window *screen, ref GameState state)
     glEnd();
 
     glPopMatrix();
+}
+
+void display(ref SDL_Window *screen, ref GameState state)
+{
+    // ****** DISPLAY PART ******
+    // Clear screen
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    drawPlayer(PlayerOne, state);
+    drawPlayer(PlayerTwo, state);
+    drawBall(state);
 
     // Swap buffers
     SDL_GL_SwapWindow(screen);
@@ -167,6 +158,7 @@ void checkCollisons(ref GameState state)
 {
     import std.math : fabs;
 
+    // Check collision with left player
     if (state.ballSpeed[0] < 0)
     {
         if (state.ballPos[0] <= state.racketXPosition[0] + state.racketHalfWidth[0] &&
@@ -176,6 +168,7 @@ void checkCollisons(ref GameState state)
         }
     }
 
+    // Check collision with right player
     if (state.ballSpeed[0] > 0)
     {
         if (state.ballPos[0] >= state.racketXPosition[1] - state.racketHalfWidth[1] &&
@@ -185,8 +178,11 @@ void checkCollisons(ref GameState state)
         }
     }
 
+    // Check collision with lower bound of the screen
     if (state.ballPos[1] <= state.limits[0])
         state.ballSpeed[1] *= -1;
+
+    // Check collision with the upper bound of the screen
     if (state.ballPos[1] >= state.limits[1])
         state.ballSpeed[1] *= -1;
 }
@@ -201,7 +197,8 @@ void updateGameplay(ref GameState state, float dt)
     updatePlayers(state, dt);
 }
 
-void main() {
+void main()
+{
     SDL_Window * screen = null;
     SDL_GLContext context = null;
 
