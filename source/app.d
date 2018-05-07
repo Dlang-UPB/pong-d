@@ -62,14 +62,20 @@ struct GameState
     vec2f ballPos = 0.;
     vec2f ballSpeed = 0.4;
 
-    float[numPlayers] racketCenter = [0, 0];
-    float[numPlayers] racketLen = [0.1, 0.1];
+    float[numPlayers] racketYCenter = [0, 0];
+    float[numPlayers] racketXPosition = [-0.9, 0.9];
+    float[numPlayers] racketHalfLength = [0.01, 0.01];
+    float[numPlayers] racketHalfWidth = [0.01, 0.01];
 
-    float[numPlayers] racketSpeed = [0.1, 0.1];
+    float[numPlayers] racketSpeed = [0.5, 0.5];
     float[2] limits = [-1, 1];
 }
 
-void display(ref SDL_Window *screen, FpsCounter fps)
+enum PlayerOne = 0;
+enum PlayerTwo = 1;
+GameState state;
+
+void display(ref SDL_Window *screen, FpsCounter fps, ref GameState state)
 {
     bool end = true;
 
@@ -82,7 +88,7 @@ void display(ref SDL_Window *screen, FpsCounter fps)
     glPushMatrix();
 
     glColor3f(1., 1., 1.);
-    glTranslated(-0.9, p1, 0.0);
+    glTranslated(-0.9, state.racketYCenter[0], 0.0);
     glBegin(GL_TRIANGLE_STRIP);
     glVertex3d(-0.01, -0.1, 0.0);
     glVertex3d(-0.01,  0.1, 0.0);
@@ -95,7 +101,7 @@ void display(ref SDL_Window *screen, FpsCounter fps)
     // Display second player
     glPushMatrix();
 
-    glTranslated( 0.9, p2, 0.0);
+    glTranslated( 0.9, state.racketYCenter[1], 0.0);
     glBegin(GL_TRIANGLE_STRIP);
     glVertex3d(-0.01, -0.1, 0.0);
     glVertex3d(-0.01,  0.1, 0.0);
@@ -109,7 +115,7 @@ void display(ref SDL_Window *screen, FpsCounter fps)
     glPushMatrix();
 
     glColor3f(1., 1., 0.);
-    glTranslated( ballX, ballY, 0.0);
+    glTranslated( state.ballPos[0], state.ballPos[1], 0.0);
     glBegin(GL_TRIANGLE_STRIP);
     glVertex3d(-0.01, -0.01 * 16 / 9, 0.0);
     glVertex3d(-0.01,  0.01 * 16 / 9, 0.0);
@@ -284,6 +290,8 @@ class FpsCounter
     }
 }
 
+import std.stdio;
+
 void updateBall(ref GameState state, float dt)
 {
     for (int i = 0; i < state.ballPos.length; i++)
@@ -298,21 +306,23 @@ void updatePlayers(ref GameState state, float dt)
     
     for (int i = 0; i < state.numPlayers; i++)
     {
-        float yDiff = state.racketPos[i] - state.ballPos[1];
-        if (yDiff < eps)
+        float yDiff = state.racketYCenter[i] - state.ballPos[1];
+        if (fabs(yDiff) < state.eps)
             continue;
 
-        float dy = yDiff / fabs(yDiff);
-        state.racketPos[i] += dy * dt * state.racketSpeed[i];
+        float dy = -yDiff / fabs(yDiff);
+        state.racketYCenter[i] += dy * dt * state.racketSpeed[i];
     }
 }
 
 void checkCollisons(ref GameState state)
 {
+    import std.math : fabs;
+
     if (state.ballSpeed[0] < 0)
     {
-        if (state.ballPos[0] <= state.limits[0] && 
-            fabs(state.ballPos[1] - state.racketPos[0]) < state.racketLen[0])
+        if (state.ballPos[0] <= state.racketXPosition[0] + state.racketHalfLength[0] &&
+            fabs(state.ballPos[1] - state.racketYCenter[0]) < state.racketHalfLength[0])
         {
             state.ballSpeed[0] *= -1;
         }
@@ -320,17 +330,18 @@ void checkCollisons(ref GameState state)
 
     if (state.ballSpeed[0] > 0)
     {
-        if (state.ballPos[0] >= state.limits[1] && 
-            fabs(state.ballPos[1] - state.racketPos[1]) < state.racketLen[1])
+        writeln(state.ballPos[0]);
+        if (state.ballPos[0] >= state.racketXPosition[1] - state.racketHalfLength[1] &&
+            fabs(state.ballPos[1] - state.racketYCenter[1]) < state.racketHalfLength[1])
         {
             state.ballSpeed[0] *= -1;
         }
     }
 
-    if (state.ballpos[1] >= state.limits[1])
-        state.ballpos[1] *= -1;
-    if (state.ballpos[1] <= state.limits[0])
-        state.ballpos[1] *= -1;
+    if (state.ballPos[1] <= state.limits[0])
+        state.ballSpeed[1] *= -1;
+    if (state.ballPos[1] >= state.limits[1])
+        state.ballSpeed[1] *= -1;
 }
 
 
@@ -347,14 +358,20 @@ void main() {
     SDL_Window * screen = null;
     SDL_GLContext context = null;
 
+    auto prevTicks = SDL_GetTicks();
+    float deltaTimeConstant = 1000.;
     InitSDL(screen, context);
 
     bool end = false;
     auto fps = new FpsCounter();
     while(!end)
     {
+        auto currentTicks = SDL_GetTicks();
+        float dt = (currentTicks - prevTicks) / deltaTimeConstant;
+        prevTicks = currentTicks;
+
         updateGameplay(state, dt);
-        display(screen, fps);
+        display(screen, fps, state);
 
         // Check events
         SDL_Event event;
