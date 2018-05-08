@@ -1,5 +1,6 @@
 import std.stdio;
 import derelict.sdl2.sdl;
+import derelict.sdl2.image;
 import derelict.opengl;
 import std.typecons : Tuple;
 import std.algorithm.comparison : min, max;
@@ -278,6 +279,52 @@ void processKeydownEv(ref SDL_Event event, ref GameState state, float dt)
     }
 }
 
+SDL_Texture* loadTexture(const(char)[] path)
+{
+    //The final texture
+    SDL_Texture* newTexture = null;
+
+    //Load image at specified path
+    SDL_Surface* loadedSurface = IMG_Load(path.ptr);
+    if(loadedSurface == null)
+    {
+        writefln("Unable to load image %s! SDL_image Error: %s\n", path, IMG_GetError());
+    }
+    else
+    {
+        //Create texture from surface pixels
+        newTexture = SDL_CreateTextureFromSurface(gRenderer, loadedSurface);
+        if(newTexture == null)
+        {
+            writefln("Unable to create texture from %s! SDL Error: %s\n", path, SDL_GetError());
+        }
+
+        //Get rid of old loaded surface
+        SDL_FreeSurface(loadedSurface);
+    }
+
+    return newTexture;
+}
+
+bool loadMedia()
+{
+    //Loading success flag
+    bool success = true;
+
+    //Load PNG texture
+    gTexture = loadTexture("res/texture.png");
+    if(gTexture == null)
+    {
+        writeln("Failed to load texture image!");
+        success = false;
+    }
+
+    return success;
+}
+
+SDL_Renderer *gRenderer;
+SDL_Texture *gTexture;
+
 void main()
 {
     import std.conv : to;
@@ -288,7 +335,56 @@ void main()
     float deltaTimeConstant = 1000.;
     InitSDL(screen, context);
 
+    SDL_RendererFlags none;
+    gRenderer = SDL_CreateRenderer(screen, -1, none);
+    gTexture = SDL_CreateTexture(gRenderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, 1024, 768);
+
+    SDL_Rect r;
+    r.w = 100;
+    r.h = 20;
+
+    int imgFlags = IMG_INIT_PNG;
+    if( !( IMG_Init( imgFlags ) & imgFlags ) )
+    {
+        writeln( "SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError() );
+    }
+    loadMedia();
+        //Clear screen
+        SDL_RenderClear(gRenderer);
+
+        //Render texture to screen
+        SDL_RenderCopy(gRenderer, gTexture, null, null);
+
+        //Update screen
+        SDL_RenderPresent(gRenderer);
+
+    while(1)
+    {
+        SDL_Event event;
+        SDL_PollEvent(&event);
+        if(event.type == SDL_QUIT)
+            break;
+
+        r.x = 100;
+        r.y = 100;
+
+        SDL_SetRenderTarget(gRenderer, gTexture);
+        SDL_SetRenderDrawColor(gRenderer, 0x00, 0x00, 0x00, 0x00);
+        SDL_RenderClear(gRenderer);
+
+        SDL_RenderDrawRect(gRenderer, &r);
+        SDL_SetRenderDrawColor(gRenderer, 0xFF, 0x00, 0x00, 0x00);
+        SDL_RenderFillRect(gRenderer, &r);
+
+        SDL_SetRenderTarget(gRenderer, null);
+        SDL_RenderClear(gRenderer);
+        SDL_RenderCopy(gRenderer, gTexture, null, null);
+        SDL_RenderPresent(gRenderer);
+
+    }
+
     bool end = false;
+    version(none)
     while(!end)
     {
         auto currentTicks = SDL_GetTicks();
