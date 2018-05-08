@@ -114,7 +114,7 @@ struct Score
 struct Ball
 {
     vec2f pos = vec2f(0, 0);
-    vec2f speed = vec2f(0.7, 0.7);
+    vec2f speed = vec2f(0.5, 0.5);
     float size = 0.03;
     SDL_Texture* ballTexture;
 
@@ -147,7 +147,7 @@ struct Racket
         }
         else
         {
-            speed = 0.5;
+            speed = 0.8;
             oxPosition = 0.9;
         }
     }
@@ -252,13 +252,23 @@ void updatePlayers(ref GameState state, float dt)
 
 void checkCollisons(ref GameState state)
 {
+    import std.random;
+    auto rnd = Random();
+
     // Check collision with left player
     if (state.ball.speed.x < 0)
     {
         if (state.ball.pos.x <= state.racket[Player.One].oxPosition + state.racket[Player.One].halfWidth &&
             fabs(state.ball.pos.y - state.racket[Player.One].oyCenter) < state.racket[Player.One].halfLength)
         {
+            float extraX = uniform(0.1, 0.2, rnd);
+            float extraY = uniform(0.1, 0.2, rnd);
+            state.ball.speed.x -= extraX;
             state.ball.speed.x *= -1;
+            if (state.ball.speed.y > 0)
+                state.ball.speed.y += extraY;
+            else
+                state.ball.speed.y -= extraY;
         }
     }
 
@@ -268,7 +278,14 @@ void checkCollisons(ref GameState state)
         if (state.ball.pos.x >= state.racket[Player.Two].oxPosition - state.racket[Player.Two].halfWidth &&
             fabs(state.ball.pos.y - state.racket[Player.Two].oyCenter) < state.racket[Player.Two].halfLength)
         {
+            float extraX = uniform(0.1, 0.2, rnd);
+            float extraY = uniform(0.1, 0.2, rnd);
             state.ball.speed.x *= -1;
+            state.ball.speed.x += extraX;
+            if (state.ball.speed.y > 0)
+                state.ball.speed.y += extraY;
+            else
+                state.ball.speed.y -= extraY;
         }
     }
 
