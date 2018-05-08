@@ -8,9 +8,13 @@
         "derelict-gl3": "~>2.0.0-beta"
     },
     "libs": [
+        "SDL2_image",
+        "SDL2_ttf",
         "sdl2"
     ],
-    "versions": ["DerelictSDL2_Static"],
+    "versions": [
+        "DerelictSDL2_Static"
+    ],
     "description": "A minimal D application.",
     "copyright": "Copyright © 2018, Eduard Staniloiu",
     "license": "proprietary"
