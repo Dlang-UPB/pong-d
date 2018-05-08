@@ -1,6 +1,9 @@
 import std.stdio;
 import derelict.sdl2.sdl;
 import derelict.opengl;
+import std.typecons : Tuple;
+import std.algorithm.comparison : min, max;
+import std.math : fabs;
 
 //mixin glFreeFuncs!(GLVersion.gl33);
 //mixin glContext!(GLVersion.gl33);
@@ -20,8 +23,6 @@ mixin glDecls!(maxGLVersion, supportDeprecated);
     mixin glLoaders!(maxGLVersion, supportDeprecated);
 //}
 //MyContext context;
-
-alias vec2f = float[2];
 
 void InitSDL(ref SDL_Window *screen, ref SDL_GLContext context)
 {
@@ -52,28 +53,53 @@ void InitSDL(ref SDL_Window *screen, ref SDL_GLContext context)
     screen = scr;
 }
 
+alias vec2f = Tuple!(float, "x", float, "y");
+
 struct GameState
 {
     static enum numPlayers = 2;
+    // Distance moved by one key press on the OY axis
+    static enum dy = 2.;
+    // Tolerance
     float eps = 0.001;
 
-    vec2f ballPos = 0.;
-    vec2f ballSpeed = 0.4;
-    float ballSize = 0.01;
+    // The state should never be copied
+    @disable this(this);
 
-    float[numPlayers] racketYCenter = [0, 0];
-    float[numPlayers] racketXPosition = [-0.9, 0.9];
-    float[numPlayers] racketHalfLength = [0.3, 0.1];
-    float[numPlayers] racketHalfWidth = [0.03, 0.01];
+    Ball ball;
 
-    float[numPlayers] racketSpeed = [0.5, 0.5];
+    // Initialize the player rackets
+    Racket[numPlayers] racket = [Racket(-0.9), Racket(0.9)];
+
+    // Screen limits
     float[2] limits = [-1, 1];
 }
 
-enum PlayerOne = 0;
-enum PlayerTwo = 1;
-enum X = 0;
-enum Y = 1;
+struct Ball
+{
+    vec2f pos = vec2f(0, 0);
+    vec2f speed = vec2f(0.4, 0.4);
+    float size = 0.01;
+}
+
+struct Racket
+{
+    // Set the racket on the left or right side of the screen
+    this(float oxPos)
+    {
+        oxPosition = oxPos;
+    }
+
+    // Default values
+    float oyCenter = 0;
+    float oxPosition;
+    float halfLength = 0.3;
+    float halfWidth = 0.01;
+    float speed = 0.5;
+}
+
+enum Player { One, Two }
+enum Direction { Down, Up }
 
 GameState state;
 
@@ -82,11 +108,11 @@ void drawPlayer(int player, ref GameState state)
     glPushMatrix();
 
     glColor3f(1., 1., 1.);
-    glTranslated(state.racketXPosition[player], state.racketYCenter[player], 0.0);
+    glTranslated(state.racket[player].oxPosition, state.racket[player].oyCenter, 0.0);
     glBegin(GL_TRIANGLE_STRIP);
 
-    auto halfLength = state.racketHalfLength[player];
-    auto halfWidth = state.racketHalfWidth[player];
+    auto halfLength = state.racket[player].halfLength;
+    auto halfWidth = state.racket[player].halfWidth;
     glVertex3d(-halfWidth, -halfLength, 0.0);
     glVertex3d(-halfWidth, halfLength, 0.0);
     glVertex3d(halfWidth, -halfLength, 0.0);
@@ -101,10 +127,10 @@ void drawBall(ref GameState state)
     glPushMatrix();
 
     glColor3f(1., 1., 0.);
-    glTranslated(state.ballPos[0], state.ballPos[1], 0.0);
+    glTranslated(state.ball.pos.x, state.ball.pos.y, 0.0);
     glBegin(GL_TRIANGLE_STRIP);
 
-    auto ballSize = state.ballSize;
+    auto ballSize = state.ball.size;
     glVertex3d(-ballSize, -ballSize, 0.0);
     glVertex3d(-ballSize, ballSize, 0.0);
     glVertex3d(ballSize, -ballSize, 0.0);
@@ -117,84 +143,139 @@ void drawBall(ref GameState state)
 
 void display(ref SDL_Window *screen, ref GameState state)
 {
-    // ****** DISPLAY PART ******
     // Clear screen
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    drawPlayer(PlayerOne, state);
-    drawPlayer(PlayerTwo, state);
+    drawPlayer(Player.One, state);
+    drawPlayer(Player.Two, state);
     drawBall(state);
 
     // Swap buffers
     SDL_GL_SwapWindow(screen);
 }
 
-import std.stdio;
-
 void updateBall(ref GameState state, float dt)
 {
-    for (int i = 0; i < state.ballPos.length; i++)
+    state.ball.pos.x += dt * state.ball.speed.x;
+    state.ball.pos.y += dt * state.ball.speed.y;
+}
+
+void movePlayer(ref GameState state, Player player, Direction dir, float dt)
+{
+    if (dir == Direction.Up)
     {
-        state.ballPos[i] += dt * state.ballSpeed[i];
+        auto newOyCenter = state.racket[player].oyCenter + state.dy * dt * state.racket[player].speed;
+        state.racket[player].oyCenter = min(state.limits[dir], newOyCenter);
+    }
+    else
+    {
+        auto newOyCenter = state.racket[player].oyCenter - state.dy * dt * state.racket[player].speed;
+        state.racket[player].oyCenter = max(state.limits[dir], newOyCenter);
     }
 }
 
-void updatePlayers(ref GameState state, float dt)
+/**
+ * Recieve an array of artificial "intelligence" players.
+ */
+void updatePlayers(ref GameState state, Player[] ai, float dt)
 {
-    import std.math : fabs;
-    
-    for (int i = 0; i < state.numPlayers; i++)
+    for (int i = 0; i < ai.length; ++i)
     {
-        float yDiff = state.racketYCenter[i] - state.ballPos[1];
+        uint player = ai[i];
+        float yDiff = state.racket[player].oyCenter - state.ball.pos.y;
         if (fabs(yDiff) < state.eps)
             continue;
 
         float dy = -yDiff / fabs(yDiff);
-        state.racketYCenter[i] += dy * dt * state.racketSpeed[i];
+        state.racket[player].oyCenter += dy * dt * state.racket[player].speed;
     }
 }
 
 void checkCollisons(ref GameState state)
 {
-    import std.math : fabs;
-
     // Check collision with left player
-    if (state.ballSpeed[0] < 0)
+    if (state.ball.speed.x < 0)
     {
-        if (state.ballPos[0] <= state.racketXPosition[0] + state.racketHalfWidth[0] &&
-            fabs(state.ballPos[1] - state.racketYCenter[0]) < state.racketHalfLength[0])
+        if (state.ball.pos.x <= state.racket[Player.One].oxPosition + state.racket[Player.One].halfWidth &&
+            fabs(state.ball.pos.y - state.racket[Player.One].oyCenter) < state.racket[Player.One].halfLength)
         {
-            state.ballSpeed[0] *= -1;
+            state.ball.speed.x *= -1;
         }
     }
 
     // Check collision with right player
-    if (state.ballSpeed[0] > 0)
+    if (state.ball.speed.x > 0)
     {
-        if (state.ballPos[0] >= state.racketXPosition[1] - state.racketHalfWidth[1] &&
-            fabs(state.ballPos[1] - state.racketYCenter[1]) < state.racketHalfLength[1])
+        if (state.ball.pos.x >= state.racket[Player.Two].oxPosition - state.racket[Player.Two].halfWidth &&
+            fabs(state.ball.pos.y - state.racket[Player.Two].oyCenter) < state.racket[Player.Two].halfLength)
         {
-            state.ballSpeed[0] *= -1;
+            state.ball.speed.x *= -1;
         }
     }
 
     // Check collision with lower bound of the screen
-    if (state.ballPos[1] <= state.limits[0])
-        state.ballSpeed[1] *= -1;
+    if (state.ball.pos.y <= state.limits[0])
+        state.ball.speed.y *= -1;
 
     // Check collision with the upper bound of the screen
-    if (state.ballPos[1] >= state.limits[1])
-        state.ballSpeed[1] *= -1;
+    if (state.ball.pos.y >= state.limits[1])
+        state.ball.speed.y *= -1;
 }
 
 
 void updateGameplay(ref GameState state, float dt)
 {
-    import std.math : fabs;
+    // TMP: define player two as AI
+    Player[] ai = [Player.Two];
 
     checkCollisons(state);
     updateBall(state, dt);
-    updatePlayers(state, dt);
+    updatePlayers(state, ai, dt);
+}
+
+/**
+ * Process events from user.
+ *
+ * Returns:
+ *      `true` if user wants to quit; `false` otherwise.
+ */
+bool processEvents(ref GameState state, float dt)
+{
+    // Check events
+    SDL_Event event;
+    while (SDL_PollEvent(&event))
+    {
+        switch (event.type)
+        {
+            case SDL_QUIT:
+                // Quit the program
+                return true;
+            case SDL_KEYDOWN:
+                processKeydownEv(event, state, dt);
+                break;
+            default:
+                debug(PongD) writefln("Untreated event %s", event.type);
+        }
+    }
+    return false;
+}
+
+/**
+ * Process keyboard events from user.
+ */
+void processKeydownEv(ref SDL_Event event, ref GameState state, float dt)
+{
+    switch (event.key.keysym.sym)
+    {
+        case SDLK_UP:
+            movePlayer(state, Player.One, Direction.Up, dt);
+            break;
+        case SDLK_DOWN:
+            movePlayer(state, Player.One, Direction.Down, dt);
+            break;
+        default:
+            debug (PongD) writefln("pressed %s", event.key.keysym);
+    }
 }
 
 void main()
@@ -214,23 +295,11 @@ void main()
         float dt = (currentTicks - prevTicks) / deltaTimeConstant;
         prevTicks = currentTicks;
 
+        end = processEvents(state, dt);
+
         updateGameplay(state, dt);
         display(screen, state);
 
-        // Check events
-        SDL_Event event;
-        while (SDL_PollEvent(&event))
-        {
-            switch (event.type)
-            {
-                // Quit the program
-                case SDL_QUIT:
-                    end = true;
-                    break;
-                default:
-                    debug(PongD) writefln("Untreated event %s", event.type);
-            }
-        }
     }
 
     scope(exit) SDL_Quit();
