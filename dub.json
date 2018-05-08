@@ -4,7 +4,7 @@
         "Eduard Staniloiu"
     ],
     "dependencies": {
-        "derelict-sdl2": "~>3.0.0",
+        "derelict-sdl2": "~>3.1.0-alpha.3",
         "derelict-gl3": "~>2.0.0-beta"
     },
     "libs": [

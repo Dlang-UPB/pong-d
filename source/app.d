@@ -199,6 +199,7 @@ void updateGameplay(ref GameState state, float dt)
 
 void main()
 {
+    import std.conv : to;
     SDL_Window * screen = null;
     SDL_GLContext context = null;
 
@@ -225,8 +226,9 @@ void main()
                 // Quit the program
                 case SDL_QUIT:
                     end = true;
-                default:
                     break;
+                default:
+                    debug(PongD) writefln("Untreated event %s", event.type);
             }
         }
     }
