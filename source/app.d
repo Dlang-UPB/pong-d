@@ -1,6 +1,7 @@
 import std.stdio;
 import derelict.sdl2.sdl;
 import derelict.sdl2.image;
+import derelict.sdl2.ttf;
 import derelict.opengl;
 import std.typecons : Tuple;
 import std.algorithm.comparison : min, max;
@@ -25,6 +26,9 @@ mixin glDecls!(maxGLVersion, supportDeprecated);
 //}
 //MyContext context;
 
+enum screenHeight = 480;
+enum screenWidth = 640;
+
 void InitSDL(ref SDL_Window *screen, ref SDL_GLContext context)
 {
     DerelictGL3.load();
@@ -39,7 +43,7 @@ void InitSDL(ref SDL_Window *screen, ref SDL_GLContext context)
     SDL_Window *scr = SDL_CreateWindow("Automatic PONG",
                                           SDL_WINDOWPOS_UNDEFINED,
                                           SDL_WINDOWPOS_UNDEFINED,
-                                          640, 480,
+                                          screenWidth, screenHeight,
                                           SDL_WINDOW_OPENGL);
     if (!scr)
     {
@@ -60,7 +64,7 @@ struct GameState
 {
     static enum numPlayers = 2;
     // Distance moved by one key press on the OY axis
-    static enum dy = 2.;
+    static enum dy = 20.;
     // Tolerance
     float eps = 0.001;
 
@@ -74,13 +78,52 @@ struct GameState
 
     // Screen limits
     float[2] limits = [-1, 1];
+
+    Score score;
+    SDL_Texture* backgroundTexture;
+}
+
+struct Score
+{
+    enum fontSize = 100;
+    vec2f pos = vec2f(-0.16, -1);
+    float fontWidth = 0.3;
+    float fontHeight = 0.3;
+
+    // Score for the two players
+    int[2] score;
+    SDL_Color textColor = {255,255,255};
+    TTF_Font* font;
+    SDL_Surface* textSurface;
+    SDL_Texture* fontTexture;
+
+    void adjustScore()
+    {
+        import std.string : toStringz;
+        import std.conv : to;
+        import core.stdc.stdlib : free;
+
+        string text = to!string(score[0], 10) ~ " - " ~ to!string(score[1], 10);
+        free(textSurface);
+        free(fontTexture);
+        textSurface = TTF_RenderText_Solid(font, toStringz(text), textColor);
+        fontTexture = SDL_CreateTextureFromSurface(gRenderer, textSurface);
+    }
 }
 
 struct Ball
 {
     vec2f pos = vec2f(0, 0);
-    vec2f speed = vec2f(0.4, 0.4);
-    float size = 0.01;
+    vec2f speed = vec2f(0.7, 0.7);
+    float size = 0.03;
+    SDL_Texture* ballTexture;
+
+    void reset()
+    {
+        pos = vec2f(0, 0);
+        speed = vec2f(0.7, 0.7);
+        size = 0.03;
+    }
 }
 
 struct Racket
@@ -91,12 +134,31 @@ struct Racket
         oxPosition = oxPos;
     }
 
+    void reset(int player)
+    {
+        oyCenter = 0;
+        halfLength = 0.3;
+        halfWidth = 0.01;
+
+        if (player == Player.One)
+        {
+            speed = 0;
+            oxPosition = -0.9;
+        }
+        else
+        {
+            speed = 0.5;
+            oxPosition = 0.9;
+        }
+    }
+
     // Default values
     float oyCenter = 0;
-    float oxPosition;
+    float oxPosition = 0;
     float halfLength = 0.3;
     float halfWidth = 0.01;
     float speed = 0.5;
+    SDL_Texture* playerTexture;
 }
 
 enum Player { One, Two }
@@ -106,53 +168,58 @@ GameState state;
 
 void drawPlayer(int player, ref GameState state)
 {
-    glPushMatrix();
+    SDL_Rect r;
+    auto racket = state.racket[player];
+    r.x = cast(int) ((racket.oxPosition - racket.halfWidth + 1) * (screenWidth / 2));
+    r.y = cast(int) ((2 - (racket.oyCenter + racket.halfLength + 1)) * (screenHeight / 2));
+    r.w = cast(int) ((2 * racket.halfWidth) * (screenWidth / 2));
+    r.h = cast(int) ((2 * racket.halfLength) * (screenHeight / 2));
 
-    glColor3f(1., 1., 1.);
-    glTranslated(state.racket[player].oxPosition, state.racket[player].oyCenter, 0.0);
-    glBegin(GL_TRIANGLE_STRIP);
-
-    auto halfLength = state.racket[player].halfLength;
-    auto halfWidth = state.racket[player].halfWidth;
-    glVertex3d(-halfWidth, -halfLength, 0.0);
-    glVertex3d(-halfWidth, halfLength, 0.0);
-    glVertex3d(halfWidth, -halfLength, 0.0);
-    glVertex3d(halfWidth, halfLength, 0.0);
-    glEnd();
-
-    glPopMatrix();
+    //Update screen
+    SDL_RenderCopy(gRenderer, racket.playerTexture, null, &r);
 }
 
 void drawBall(ref GameState state)
 {
-    glPushMatrix();
+    SDL_Rect r;
+    auto ball = state.ball;
+    r.x = cast(int) ((ball.pos.x - ball.size + 1) * (screenWidth / 2));
+    r.y = cast(int) ((2 - (ball.pos.y + ball.size + 1)) * (screenHeight / 2));
+    r.w = cast(int) ((2 * ball.size) * (screenWidth / 2));
+    r.h = cast(int) ((2 * ball.size) * (screenHeight / 2));
 
-    glColor3f(1., 1., 0.);
-    glTranslated(state.ball.pos.x, state.ball.pos.y, 0.0);
-    glBegin(GL_TRIANGLE_STRIP);
-
-    auto ballSize = state.ball.size;
-    glVertex3d(-ballSize, -ballSize, 0.0);
-    glVertex3d(-ballSize, ballSize, 0.0);
-    glVertex3d(ballSize, -ballSize, 0.0);
-    glVertex3d(ballSize, ballSize, 0.0);
-    glColor3f(1., 1., 1.);
-    glEnd();
-
-    glPopMatrix();
+    //Update screen
+    SDL_RenderCopy(gRenderer, ball.ballTexture, null, &r);
 }
+
+void drawScore(ref GameState state)
+{
+    auto score = state.score;
+    SDL_Rect r;
+    r.x = cast(int) ((score.pos.x + 1) * (screenWidth / 2));
+    r.y = cast(int) ((score.pos.y + 1) * (screenHeight / 2));
+    r.w = cast(int) ((score.fontWidth) * (screenWidth / 2));
+    r.h = cast(int) ((score.fontHeight) * (screenHeight / 2));
+
+    SDL_RenderCopy(gRenderer, score.fontTexture, null, &r);
+}
+
 
 void display(ref SDL_Window *screen, ref GameState state)
 {
-    // Clear screen
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    //Clear screen
+    SDL_RenderClear(gRenderer);
+    SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0xFF, 0xFF);
+
+    //Render texture to screen
+    SDL_RenderCopy(gRenderer, state.backgroundTexture, null, null);
 
     drawPlayer(Player.One, state);
     drawPlayer(Player.Two, state);
     drawBall(state);
+    drawScore(state);
 
-    // Swap buffers
-    SDL_GL_SwapWindow(screen);
+    SDL_RenderPresent(gRenderer);
 }
 
 void updateBall(ref GameState state, float dt)
@@ -161,35 +228,26 @@ void updateBall(ref GameState state, float dt)
     state.ball.pos.y += dt * state.ball.speed.y;
 }
 
-void movePlayer(ref GameState state, Player player, Direction dir, float dt)
+void movePlayer(ref GameState state, int player, float dt)
 {
-    if (dir == Direction.Up)
-    {
-        auto newOyCenter = state.racket[player].oyCenter + state.dy * dt * state.racket[player].speed;
-        state.racket[player].oyCenter = min(state.limits[dir], newOyCenter);
-    }
-    else
-    {
-        auto newOyCenter = state.racket[player].oyCenter - state.dy * dt * state.racket[player].speed;
-        state.racket[player].oyCenter = max(state.limits[dir], newOyCenter);
-    }
+    auto newOyCenter = state.racket[player].oyCenter + dt * state.racket[player].speed;
+    state.racket[player].oyCenter = min(state.limits[1], newOyCenter);
+    state.racket[player].oyCenter = max(state.limits[0], newOyCenter);
 }
 
 /**
  * Recieve an array of artificial "intelligence" players.
  */
-void updatePlayers(ref GameState state, Player[] ai, float dt)
+void updatePlayers(ref GameState state, float dt)
 {
-    for (int i = 0; i < ai.length; ++i)
-    {
-        uint player = ai[i];
-        float yDiff = state.racket[player].oyCenter - state.ball.pos.y;
-        if (fabs(yDiff) < state.eps)
-            continue;
+    movePlayer(state, Player.One, dt);
 
-        float dy = -yDiff / fabs(yDiff);
-        state.racket[player].oyCenter += dy * dt * state.racket[player].speed;
-    }
+    float yDiff = state.racket[Player.Two].oyCenter - state.ball.pos.y;
+    if (fabs(yDiff) < state.eps)
+        return;
+
+    float dy = -yDiff / fabs(yDiff);
+    state.racket[Player.Two].oyCenter += dy * dt * state.racket[Player.Two].speed;
 }
 
 void checkCollisons(ref GameState state)
@@ -223,15 +281,30 @@ void checkCollisons(ref GameState state)
         state.ball.speed.y *= -1;
 }
 
+bool checkGameOver(ref GameState state)
+{
+    if (state.ball.pos.x <= state.limits[0])
+    {
+        state.score.score[Player.One]++;
+        return true;
+    }
+
+    if (state.ball.pos.x >= state.limits[1])
+    {
+        state.score.score[Player.Two]++;
+        return true;
+    }
+
+    return false;
+}
 
 void updateGameplay(ref GameState state, float dt)
 {
-    // TMP: define player two as AI
-    Player[] ai = [Player.Two];
-
+    if (checkGameOver(state))
+        initGame(state);
     checkCollisons(state);
     updateBall(state, dt);
-    updatePlayers(state, ai, dt);
+    updatePlayers(state, dt);
 }
 
 /**
@@ -254,8 +327,12 @@ bool processEvents(ref GameState state, float dt)
             case SDL_KEYDOWN:
                 processKeydownEv(event, state, dt);
                 break;
+            case SDL_KEYUP:
+                processKeyupEv(event, state, dt);
+                break;
             default:
                 debug(PongD) writefln("Untreated event %s", event.type);
+                break;
         }
     }
     return false;
@@ -269,10 +346,28 @@ void processKeydownEv(ref SDL_Event event, ref GameState state, float dt)
     switch (event.key.keysym.sym)
     {
         case SDLK_UP:
-            movePlayer(state, Player.One, Direction.Up, dt);
+            state.racket[Player.One].speed = 0.5;
             break;
         case SDLK_DOWN:
-            movePlayer(state, Player.One, Direction.Down, dt);
+            state.racket[Player.One].speed = -0.5;
+            break;
+        default:
+            debug (PongD) writefln("pressed %s", event.key.keysym);
+    }
+}
+
+/**
+ * Process keyboard events from user.
+ */
+void processKeyupEv(ref SDL_Event event, ref GameState state, float dt)
+{
+    switch (event.key.keysym.sym)
+    {
+        case SDLK_UP:
+            state.racket[Player.One].speed = 0;
+            break;
+        case SDLK_DOWN:
+            state.racket[Player.One].speed = 0;
             break;
         default:
             debug (PongD) writefln("pressed %s", event.key.keysym);
@@ -306,24 +401,80 @@ SDL_Texture* loadTexture(const(char)[] path)
     return newTexture;
 }
 
-bool loadMedia()
+bool loadMedia(ref GameState state)
 {
+    import std.string : toStringz;
+
     //Loading success flag
     bool success = true;
+    SDL_Texture* backgroundTexture;
+    SDL_Texture* playerOneTexture;
+    SDL_Texture* playerTwoTexture;
+    SDL_Texture* ballTexture;
+    const(char[]) fontpath = "/usr/share/fonts/truetype/freefont/FreeSerif.ttf";
+    SDL_Texture* fontTexture;
+    SDL_Surface* textSurface;
+    TTF_Font* font;
 
     //Load PNG texture
-    gTexture = loadTexture("res/texture.png");
-    if(gTexture == null)
+    backgroundTexture = loadTexture("res/background.png");
+    if(backgroundTexture == null)
     {
-        writeln("Failed to load texture image!");
+        writeln("Failed to load background texture image!");
         success = false;
+        goto end;
     }
+    state.backgroundTexture = backgroundTexture;
 
+    playerOneTexture = loadTexture("res/playerOne.png");
+    if(playerOneTexture == null)
+    {
+        writeln("Failed to load player one texture image!");
+        success = false;
+        goto end;
+    }
+    state.racket[Player.One].playerTexture = playerOneTexture;
+
+    playerTwoTexture = loadTexture("res/playerTwo.png");
+    if(playerTwoTexture == null)
+    {
+        writeln("Failed to load player two texture image!");
+        success = false;
+        goto end;
+    }
+    state.racket[Player.Two].playerTexture = playerTwoTexture;
+
+    ballTexture = loadTexture("res/ball.png");
+    if(ballTexture == null)
+    {
+        writeln("Failed to load ball texture image!");
+        success = false;
+        goto end;
+    }
+    state.ball.ballTexture = ballTexture;
+
+    font = TTF_OpenFont(fontpath.ptr, state.score.fontSize);
+    if (font is null)
+    {
+        writefln("TTF_OpenFont: %s\n", TTF_GetError());
+        success = false;
+        goto end;
+    }
+    state.score.font = font;
+
+end:
     return success;
 }
 
 SDL_Renderer *gRenderer;
-SDL_Texture *gTexture;
+
+void initGame(ref GameState state)
+{
+    state.racket[Player.One].reset(Player.One);
+    state.racket[Player.Two].reset(Player.Two);
+    state.ball.reset();
+    state.score.adjustScore();
+}
 
 void main()
 {
@@ -337,54 +488,28 @@ void main()
 
     SDL_RendererFlags none;
     gRenderer = SDL_CreateRenderer(screen, -1, none);
-    gTexture = SDL_CreateTexture(gRenderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, 1024, 768);
-
-    SDL_Rect r;
-    r.w = 100;
-    r.h = 20;
 
     int imgFlags = IMG_INIT_PNG;
-    if( !( IMG_Init( imgFlags ) & imgFlags ) )
+    if(!(IMG_Init(imgFlags) & imgFlags))
     {
-        writeln( "SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError() );
+        writeln("SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError());
+        return;
     }
-    loadMedia();
-        //Clear screen
-        SDL_RenderClear(gRenderer);
 
-        //Render texture to screen
-        SDL_RenderCopy(gRenderer, gTexture, null, null);
-
-        //Update screen
-        SDL_RenderPresent(gRenderer);
-
-    while(1)
+    // For fonts
+    if (TTF_Init() < 0)
     {
-        SDL_Event event;
-        SDL_PollEvent(&event);
-        if(event.type == SDL_QUIT)
-            break;
-
-        r.x = 100;
-        r.y = 100;
-
-        SDL_SetRenderTarget(gRenderer, gTexture);
-        SDL_SetRenderDrawColor(gRenderer, 0x00, 0x00, 0x00, 0x00);
-        SDL_RenderClear(gRenderer);
-
-        SDL_RenderDrawRect(gRenderer, &r);
-        SDL_SetRenderDrawColor(gRenderer, 0xFF, 0x00, 0x00, 0x00);
-        SDL_RenderFillRect(gRenderer, &r);
-
-        SDL_SetRenderTarget(gRenderer, null);
-        SDL_RenderClear(gRenderer);
-        SDL_RenderCopy(gRenderer, gTexture, null, null);
-        SDL_RenderPresent(gRenderer);
-
+        writeln("TTF_Init error");
     }
+
+    if (!loadMedia(state))
+    {
+        writeln("Failed to load media");
+        return;
+    }
+    initGame(state);
 
     bool end = false;
-    version(none)
     while(!end)
     {
         auto currentTicks = SDL_GetTicks();
@@ -395,7 +520,6 @@ void main()
 
         updateGameplay(state, dt);
         display(screen, state);
-
     }
 
     scope(exit) SDL_Quit();

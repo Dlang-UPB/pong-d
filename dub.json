@@ -9,6 +9,7 @@
     },
     "libs": [
         "SDL2_image",
+        "SDL2_ttf",
         "sdl2"
     ],
     "versions": [
