@@ -1,2 +1,12 @@
-# pong-d
-A simple pong game written in D
+# D Workshop (DPong)
+
+## Building the game
+```
+dub run
+```
+
+## Building the documentation
+```
+dub build --build=docs
+```
+
