@@ -318,8 +318,8 @@ void display(ref SDL_Window *screen, ref GameState state)
 void updateBall(ref GameState state, float dt)
 {
     auto ball = &state.ball;
-    // TODO 3: Move ball
-    // ...
+    ball.pos.x += dt * ball.speed.x;
+    ball.pos.y += dt * ball.speed.y;
 }
 
 /**
@@ -336,11 +336,10 @@ void updateBall(ref GameState state, float dt)
 void moveHumanPlayer(ref GameState state, float dt)
 {
     auto player = &state.racket[Player.One];
-    // TODO 1: Move player
-    // ...
+    player.pos.y += dt * player.speed;
 
-    // TODO 2: Limit player movement to game area
-    // ...
+    player.pos.y = min(state.limits[1], player.pos.y);
+    player.pos.y = max(state.limits[0], player.pos.y);
 }
 
 /**
@@ -391,6 +390,17 @@ void checkCollisons(ref GameState state)
     auto playerOne = &state.racket[Player.One];
     auto playerTwo = &state.racket[Player.Two];
 
+    // Check collision with left player
+    if (ball.speed.x < 0)
+    {
+        if (ball.pos.x <= playerOne.pos.x + playerOne.halfWidth &&
+            fabs(ball.pos.y - playerOne.pos.y) < playerOne.halfLength)
+        {
+            ball.speed.x *= -1;
+            ball.increaseSpeed();
+        }
+    }
+
     // Check collision with right player
     if (ball.speed.x > 0)
     {
@@ -402,14 +412,9 @@ void checkCollisons(ref GameState state)
         }
     }
 
-    // TODO 4: Check collision with left player
-    if (ball.speed.x < 0)
-    {
-        //...
-    }
-
-    // TODO 5: Check collision with lower bound of the screen
-    // ...
+    // Check collision with lower bound of the screen
+    if (ball.pos.y <= state.limits[0] || ball.pos.y >= state.limits[1])
+        ball.speed.y *= -1;
 }
 
 /**
@@ -424,8 +429,18 @@ bool checkGameOver(ref GameState state)
 {
     auto ball = &state.ball;
     auto score = &state.score;
-    // TODO 6: Check if the game is over and update the score
-    // ...
+
+    if (ball.pos.x <= state.limits[0])
+    {
+        score.score[Player.Two]++;
+        return true;
+    }
+
+    if (ball.pos.x >= state.limits[1])
+    {
+        score.score[Player.One]++;
+        return true;
+    }
 
     return false;
 }
