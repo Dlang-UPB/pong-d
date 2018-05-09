@@ -589,7 +589,7 @@ bool loadMedia(ref GameState state)
     SDL_Texture* playerOneTexture;
     SDL_Texture* playerTwoTexture;
     SDL_Texture* ballTexture;
-    const(char[]) fontpath = "/usr/share/fonts/truetype/freefont/FreeSerif.ttf";
+    const(char[]) fontpath = "./res/FreeSerifBold.ttf";
     SDL_Texture* fontTexture;
     SDL_Surface* textSurface;
     TTF_Font* font;
