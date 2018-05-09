@@ -124,37 +124,52 @@ struct Ball
         speed = vec2f(0.7, 0.7);
         size = 0.03;
     }
+
+    void increaseSpeed()
+    {
+        import std.random;
+        auto rnd = Random();
+
+        float extraX = uniform(0.1, 0.2, rnd);
+        float extraY = uniform(0.1, 0.2, rnd);
+        if (speed.x <= 0)
+            speed.x -= extraX;
+        else speed.x += extraX;
+
+        if (speed.y <= 0)
+            speed.y -= extraY;
+        else speed.y += extraY;
+    }
 }
 
 struct Racket
 {
     // Set the racket on the left or right side of the screen
-    this(float oxPos)
+    this(float x)
     {
-        oxPosition = oxPos;
+        pos.x = x;
     }
 
     void reset(int player)
     {
-        oyCenter = 0;
+        pos.y = 0;
         halfLength = 0.3;
         halfWidth = 0.01;
 
         if (player == Player.One)
         {
             speed = 0;
-            oxPosition = -0.9;
+            pos.x = -0.9;
         }
         else
         {
             speed = 0.8;
-            oxPosition = 0.9;
+            pos.x = 0.9;
         }
     }
 
     // Default values
-    float oyCenter = 0;
-    float oxPosition = 0;
+    vec2f pos = vec2f(0, 0);
     float halfLength = 0.3;
     float halfWidth = 0.01;
     float speed = 0.5;
@@ -170,8 +185,8 @@ void drawPlayer(int player, ref GameState state)
 {
     SDL_Rect r;
     auto racket = state.racket[player];
-    r.x = cast(int) ((racket.oxPosition - racket.halfWidth + 1) * (screenWidth / 2));
-    r.y = cast(int) ((2 - (racket.oyCenter + racket.halfLength + 1)) * (screenHeight / 2));
+    r.x = cast(int) ((racket.pos.x - racket.halfWidth + 1) * (screenWidth / 2));
+    r.y = cast(int) ((2 - (racket.pos.y + racket.halfLength + 1)) * (screenHeight / 2));
     r.w = cast(int) ((2 * racket.halfWidth) * (screenWidth / 2));
     r.h = cast(int) ((2 * racket.halfLength) * (screenHeight / 2));
 
@@ -204,6 +219,11 @@ void drawScore(ref GameState state)
     SDL_RenderCopy(gRenderer, score.fontTexture, null, &r);
 }
 
+void drawBackground(ref GameState state)
+{
+    //Render texture to screen
+    SDL_RenderCopy(gRenderer, state.backgroundTexture, null, null);
+}
 
 void display(ref SDL_Window *screen, ref GameState state)
 {
@@ -211,9 +231,7 @@ void display(ref SDL_Window *screen, ref GameState state)
     SDL_RenderClear(gRenderer);
     SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0xFF, 0xFF);
 
-    //Render texture to screen
-    SDL_RenderCopy(gRenderer, state.backgroundTexture, null, null);
-
+    drawBackground(state);
     drawPlayer(Player.One, state);
     drawPlayer(Player.Two, state);
     drawBall(state);
@@ -224,15 +242,31 @@ void display(ref SDL_Window *screen, ref GameState state)
 
 void updateBall(ref GameState state, float dt)
 {
-    state.ball.pos.x += dt * state.ball.speed.x;
-    state.ball.pos.y += dt * state.ball.speed.y;
+    auto ball = &state.ball;
+    ball.pos.x += dt * ball.speed.x;
+    ball.pos.y += dt * ball.speed.y;
 }
 
-void movePlayer(ref GameState state, int player, float dt)
+void moveHumanPlayer(ref GameState state, float dt)
 {
-    auto newOyCenter = state.racket[player].oyCenter + dt * state.racket[player].speed;
-    state.racket[player].oyCenter = min(state.limits[1], newOyCenter);
-    state.racket[player].oyCenter = max(state.limits[0], newOyCenter);
+    auto player = &state.racket[Player.One];
+    player.pos.y += dt * player.speed;
+
+    player.pos.y = min(state.limits[1], player.pos.y);
+    player.pos.y = max(state.limits[0], player.pos.y);
+}
+
+void moveAIPlayer(ref GameState state, float dt)
+{
+    auto player = &state.racket[Player.Two];
+    auto ball = &state.ball;
+
+    float yDiff = player.pos.y - ball.pos.y;
+    if (fabs(yDiff) < state.eps)
+        return;
+
+    float dy = -yDiff / fabs(yDiff);
+    player.pos.y += dy * dt * player.speed;
 }
 
 /**
@@ -240,75 +274,57 @@ void movePlayer(ref GameState state, int player, float dt)
  */
 void updatePlayers(ref GameState state, float dt)
 {
-    movePlayer(state, Player.One, dt);
-
-    float yDiff = state.racket[Player.Two].oyCenter - state.ball.pos.y;
-    if (fabs(yDiff) < state.eps)
-        return;
-
-    float dy = -yDiff / fabs(yDiff);
-    state.racket[Player.Two].oyCenter += dy * dt * state.racket[Player.Two].speed;
+    moveHumanPlayer(state, dt);
+    moveAIPlayer(state, dt);
 }
 
 void checkCollisons(ref GameState state)
 {
-    import std.random;
-    auto rnd = Random();
+    auto ball = &state.ball;
+    auto playerOne = &state.racket[Player.One];
+    auto playerTwo = &state.racket[Player.Two];
 
     // Check collision with left player
-    if (state.ball.speed.x < 0)
+    if (ball.speed.x < 0)
     {
-        if (state.ball.pos.x <= state.racket[Player.One].oxPosition + state.racket[Player.One].halfWidth &&
-            fabs(state.ball.pos.y - state.racket[Player.One].oyCenter) < state.racket[Player.One].halfLength)
+        if (ball.pos.x <= playerOne.pos.x + playerOne.halfWidth &&
+            fabs(ball.pos.y - playerOne.pos.y) < playerOne.halfLength)
         {
-            float extraX = uniform(0.1, 0.2, rnd);
-            float extraY = uniform(0.1, 0.2, rnd);
-            state.ball.speed.x -= extraX;
-            state.ball.speed.x *= -1;
-            if (state.ball.speed.y > 0)
-                state.ball.speed.y += extraY;
-            else
-                state.ball.speed.y -= extraY;
+            ball.speed.x *= -1;
+            ball.increaseSpeed();
         }
     }
 
     // Check collision with right player
-    if (state.ball.speed.x > 0)
+    if (ball.speed.x > 0)
     {
-        if (state.ball.pos.x >= state.racket[Player.Two].oxPosition - state.racket[Player.Two].halfWidth &&
-            fabs(state.ball.pos.y - state.racket[Player.Two].oyCenter) < state.racket[Player.Two].halfLength)
+        if (ball.pos.x >= playerTwo.pos.x - playerTwo.halfWidth &&
+            fabs(ball.pos.y - playerTwo.pos.y) < playerTwo.halfLength)
         {
-            float extraX = uniform(0.1, 0.2, rnd);
-            float extraY = uniform(0.1, 0.2, rnd);
-            state.ball.speed.x *= -1;
-            state.ball.speed.x += extraX;
-            if (state.ball.speed.y > 0)
-                state.ball.speed.y += extraY;
-            else
-                state.ball.speed.y -= extraY;
+            ball.speed.x *= -1;
+            ball.increaseSpeed();
         }
     }
 
     // Check collision with lower bound of the screen
-    if (state.ball.pos.y <= state.limits[0])
-        state.ball.speed.y *= -1;
-
-    // Check collision with the upper bound of the screen
-    if (state.ball.pos.y >= state.limits[1])
-        state.ball.speed.y *= -1;
+    if (ball.pos.y <= state.limits[0] || ball.pos.y >= state.limits[1])
+        ball.speed.y *= -1;
 }
 
 bool checkGameOver(ref GameState state)
 {
-    if (state.ball.pos.x <= state.limits[0])
+    auto ball = &state.ball;
+    auto score = &state.score;
+
+    if (ball.pos.x <= state.limits[0])
     {
-        state.score.score[Player.One]++;
+        score.score[Player.Two]++;
         return true;
     }
 
-    if (state.ball.pos.x >= state.limits[1])
+    if (ball.pos.x >= state.limits[1])
     {
-        state.score.score[Player.Two]++;
+        score.score[Player.One]++;
         return true;
     }
 
@@ -360,13 +376,14 @@ bool processEvents(ref GameState state, float dt)
  */
 void processKeydownEv(ref SDL_Event event, ref GameState state, float dt)
 {
+    auto player = &state.racket[Player.One];
     switch (event.key.keysym.sym)
     {
         case SDLK_UP:
-            state.racket[Player.One].speed = 0.5;
+            player.speed = 0.5;
             break;
         case SDLK_DOWN:
-            state.racket[Player.One].speed = -0.5;
+            player.speed = -0.5;
             break;
         default:
             debug (PongD) writefln("pressed %s", event.key.keysym);
@@ -378,13 +395,14 @@ void processKeydownEv(ref SDL_Event event, ref GameState state, float dt)
  */
 void processKeyupEv(ref SDL_Event event, ref GameState state, float dt)
 {
+    auto player = &state.racket[Player.One];
     switch (event.key.keysym.sym)
     {
         case SDLK_UP:
-            state.racket[Player.One].speed = 0;
+            player.speed = 0;
             break;
         case SDLK_DOWN:
-            state.racket[Player.One].speed = 0;
+            player.speed = 0;
             break;
         default:
             debug (PongD) writefln("pressed %s", event.key.keysym);
