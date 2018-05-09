@@ -22,3 +22,7 @@ dub run
 dub build --build=docs
 ```
 
+## Please visit our wiki
+```
+https://github.com/edi33416/pong-d/wiki
+```
