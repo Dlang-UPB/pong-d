@@ -26,9 +26,19 @@ mixin glDecls!(maxGLVersion, supportDeprecated);
 //}
 //MyContext context;
 
+/**
+ * Screen height constant
+ */
 enum screenHeight = 480;
+
+/**
+ * Screen width constant
+ */
 enum screenWidth = 640;
 
+/**
+ * Initializes the SDL library for drawing functionality.
+ */
 void InitSDL(ref SDL_Window *screen, ref SDL_GLContext context)
 {
     DerelictGL3.load();
@@ -40,11 +50,11 @@ void InitSDL(ref SDL_Window *screen, ref SDL_GLContext context)
     }
 
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_Window *scr = SDL_CreateWindow("Automatic PONG",
-                                          SDL_WINDOWPOS_UNDEFINED,
-                                          SDL_WINDOWPOS_UNDEFINED,
-                                          screenWidth, screenHeight,
-                                          SDL_WINDOW_OPENGL);
+    SDL_Window *scr = SDL_CreateWindow("D Pong",
+                                      SDL_WINDOWPOS_UNDEFINED,
+                                      SDL_WINDOWPOS_UNDEFINED,
+                                      screenWidth, screenHeight,
+                                      SDL_WINDOW_OPENGL);
     if (!scr)
     {
         writefln("Error creating screen: %s", SDL_GetError());
@@ -52,19 +62,23 @@ void InitSDL(ref SDL_Window *screen, ref SDL_GLContext context)
     }
 
     context = SDL_GL_CreateContext(scr);
-
     glEnable(GL_DEPTH_TEST);
-
     screen = scr;
 }
 
 alias vec2f = Tuple!(float, "x", float, "y");
 
+/**
+ * Holds the global state of the game.
+ * It has references to the two players by means of the `Racket[numPlayers] racket` array.
+ * It also holds the ball object (`Ball ball`) and the score (`Score score`).
+ * The `float[2] limits` array represents the limits of the screen. On the Xaxis, the leftmost point is
+ * `-1` and the rightmost is `1`.
+ * On the Yaxis, the top of the screen is `1` and the bottom part is `-1`.
+ */
 struct GameState
 {
     static enum numPlayers = 2;
-    // Distance moved by one key press on the OY axis
-    static enum dy = 20.;
     // Tolerance
     float eps = 0.001;
 
@@ -83,6 +97,14 @@ struct GameState
     SDL_Texture* backgroundTexture;
 }
 
+/**
+ * The stucture that represents the game `Score`.
+ * This holds an `int[2]` array which represent the score for the first and second player.
+ *
+ * Whenever a player wins a round, we will increment his score in the `checkGameOver` function.
+ * When the rounds restarts, inside the `initGame` function, we will adjust the score by calling
+ * `adjustScore`.
+ */
 struct Score
 {
     enum fontSize = 100;
@@ -111,6 +133,14 @@ struct Score
     }
 }
 
+/**
+ * The structure that represents the `Ball` from the game.
+ * Each `Racket` contains a `vec2f` representing the x and y coordinates. (`pos.x` and `pos.y`) $(BR)
+ * Each frame, the ball updates its position based on the `speed` member.
+ *
+ * When colliding with a player, we can increase the speed of the ball by calling the `increaseSpeed`
+ * method.
+ */
 struct Ball
 {
     vec2f pos = vec2f(0, 0);
@@ -142,6 +172,12 @@ struct Ball
     }
 }
 
+/**
+ * The structure that represents a player.
+ * Each `Racket` contains a `vec2f` representing the x and y coordinates. (`pos.x` and `pos.y`) $(BR)
+ * The dimensions of the `racket` are accessible through `halfLength` and `halfWidth`.
+ * The Yaxis coordinate is updated each frame based on the `speed` member.
+ */
 struct Racket
 {
     // Set the racket on the left or right side of the screen
@@ -181,6 +217,13 @@ enum Direction { Down, Up }
 
 GameState state;
 
+/**
+ * Draws the players `state.racket[player].playerTexture`.
+ *
+ * Params:
+ *  player = index of the player that is drawn
+ *  state = The state of the game including positions and speeds of players and ball
+ */
 void drawPlayer(int player, ref GameState state)
 {
     SDL_Rect r;
@@ -194,6 +237,12 @@ void drawPlayer(int player, ref GameState state)
     SDL_RenderCopy(gRenderer, racket.playerTexture, null, &r);
 }
 
+/**
+ * Draws the ball using `state.ball.ballTexture`.
+ *
+ * Params:
+ *  state = The state of the game including positions and speeds of players and ball
+ */
 void drawBall(ref GameState state)
 {
     SDL_Rect r;
@@ -207,6 +256,12 @@ void drawBall(ref GameState state)
     SDL_RenderCopy(gRenderer, ball.ballTexture, null, &r);
 }
 
+/**
+ * Draws the score using the font texture from `state.score.fontTexture`.
+ *
+ * Params:
+ *  state = The state of the game including positions and speeds of players and ball
+ */
 void drawScore(ref GameState state)
 {
     auto score = state.score;
@@ -219,12 +274,25 @@ void drawScore(ref GameState state)
     SDL_RenderCopy(gRenderer, score.fontTexture, null, &r);
 }
 
+/**
+ * Draws the background using the `state.backgroundTexture`.
+ *
+ * Params:
+ *  state = The state of the game including positions and speeds of players and ball
+ */
 void drawBackground(ref GameState state)
 {
     //Render texture to screen
     SDL_RenderCopy(gRenderer, state.backgroundTexture, null, null);
 }
 
+/**
+ * Does all the rendering in the following order: $(BR)
+ * 1. Draws the background $(BR)
+ * 2. Draws the two players $(BR)
+ * 3. Draws the ball $(BR)
+ * 4. Draws the score $(BR)
+ */
 void display(ref SDL_Window *screen, ref GameState state)
 {
     //Clear screen
@@ -240,6 +308,13 @@ void display(ref SDL_Window *screen, ref GameState state)
     SDL_RenderPresent(gRenderer);
 }
 
+/**
+ * Updates the position of the ball, based on its speed.
+ *
+ * Params:
+ *  state = The state of the game including positions and speeds of players and ball
+ *  dt = the CPU time between frames used for computations
+ */
 void updateBall(ref GameState state, float dt)
 {
     auto ball = &state.ball;
@@ -247,6 +322,17 @@ void updateBall(ref GameState state, float dt)
     ball.pos.y += dt * ball.speed.y;
 }
 
+/**
+ * Implements the logic for the human player.
+ * The player will update its Yaxis position (`player.pos.y`) based on the speed (`player.speed`).
+ * We also need to check that the player Yaxis position remains inside the screen.
+ * (`state.limits[1] <= player.pos.y`) and (`state.limits[0] >= player.pos.y`)
+ *
+ *
+ * Params:
+ *  state = The state of the game including positions and speeds of players and ball
+ *  dt = the CPU time between frames used for computations
+ */
 void moveHumanPlayer(ref GameState state, float dt)
 {
     auto player = &state.racket[Player.One];
@@ -256,6 +342,14 @@ void moveHumanPlayer(ref GameState state, float dt)
     player.pos.y = max(state.limits[0], player.pos.y);
 }
 
+/**
+ * Implements the logic for the AI player.
+ * The AI just follows the position of the ball.
+ *
+ * Params:
+ *  state = The state of the game including positions and speeds of players and ball
+ *  dt = the CPU time between frames used for computations
+ */
 void moveAIPlayer(ref GameState state, float dt)
 {
     auto player = &state.racket[Player.Two];
@@ -270,7 +364,10 @@ void moveAIPlayer(ref GameState state, float dt)
 }
 
 /**
- * Recieve an array of artificial "intelligence" players.
+ * Updates the position of the human (`Player.One`) and AI (`Player.two`) players.
+ * Params:
+ *  state = The state of the game including positions and speeds of players and ball
+ *  dt = the CPU time between frames used for computations
  */
 void updatePlayers(ref GameState state, float dt)
 {
@@ -278,6 +375,15 @@ void updatePlayers(ref GameState state, float dt)
     moveAIPlayer(state, dt);
 }
 
+/**
+ * Verifies all collisions in the game. They should be checked in the following order: $(BR)
+ * 1. If the ball moves to the left (ball speed is negative), check ball collision with the left player $(BR)
+ * 2. If the ball moves to the right (ball speed is positive), check ball collision with the right player $(BR)
+ * 3. Check if the ball hits the top of bottom of the screen $(BR)
+ * $(BR)
+ * If the ball collides with a player, the ball has to reverse its speed on the Xaxis (`ball.speed.x *= -1`) $(BR)
+ * If the ball collides the top or bottom of the screen, the ball has to reverse its speed on the Yaxis (`ball.speed.y *= -1`) $(BR)
+ */
 void checkCollisons(ref GameState state)
 {
     auto ball = &state.ball;
@@ -311,6 +417,14 @@ void checkCollisons(ref GameState state)
         ball.speed.y *= -1;
 }
 
+/**
+ * Checks the status of the game.
+ * If the ball reaches the right or left of the screen, the current round is over
+ * and we give points to the winning player.
+ *
+ * Returns:
+ *  `true` if the game is over and `false` otherwise
+ */
 bool checkGameOver(ref GameState state)
 {
     auto ball = &state.ball;
@@ -331,6 +445,17 @@ bool checkGameOver(ref GameState state)
     return false;
 }
 
+/**
+ * This is called every frame and does the following things in the specified order: $(BR)
+ *  1. Checks if the game is over and resets the round $(BR)
+ *  2. Computes collisions between ball and rackets $(BR)
+ *  3. Updates the position of the ball $(BR)
+ *  4. Updates the position of the players $(BR)
+ *
+ * Params:
+ *  state = The state of the game including positions and speeds of players and ball
+ *  dt = the CPU time between frames used for computations
+ */
 void updateGameplay(ref GameState state, float dt)
 {
     if (checkGameOver(state))
@@ -342,6 +467,12 @@ void updateGameplay(ref GameState state, float dt)
 
 /**
  * Process events from user.
+ * Currently we only check arrow key presses. If an arrow is pressed (`SDL_KEYDOWN`) we call the `processKeydownEv`.
+ * Otherwise `processKeyupEv` is called.
+ *
+ * Params:
+ *  state = The state of the game including positions and speeds of players and ball
+ *  dt = the CPU time between frames used for computations
  *
  * Returns:
  *      `true` if user wants to quit; `false` otherwise.
@@ -372,7 +503,8 @@ bool processEvents(ref GameState state, float dt)
 }
 
 /**
- * Process keyboard events from user.
+ * Process keyboard press events from user.
+ * If the up and down arrows are pressed, the player speed is adjusted.
  */
 void processKeydownEv(ref SDL_Event event, ref GameState state, float dt)
 {
@@ -391,7 +523,8 @@ void processKeydownEv(ref SDL_Event event, ref GameState state, float dt)
 }
 
 /**
- * Process keyboard events from user.
+ * Process keyboard up events from the user.
+ * If the user stopped pressing the up and down arrow keys, the speed is set to `0`.
  */
 void processKeyupEv(ref SDL_Event event, ref GameState state, float dt)
 {
@@ -409,6 +542,13 @@ void processKeyupEv(ref SDL_Event event, ref GameState state, float dt)
     }
 }
 
+/**
+ * Loads a single texture in memory
+ * Params:
+ *  path = path to a image which will be used in the game as a texture
+ * Returns:
+ *  The newly loaded texture
+ */
 SDL_Texture* loadTexture(const(char)[] path)
 {
     //The final texture
@@ -436,6 +576,9 @@ SDL_Texture* loadTexture(const(char)[] path)
     return newTexture;
 }
 
+/**
+ * Loads all resources, including: background, ball, player textures and fonts for the score
+ */
 bool loadMedia(ref GameState state)
 {
     import std.string : toStringz;
@@ -503,6 +646,9 @@ end:
 
 SDL_Renderer *gRenderer;
 
+/**
+ * Resets the game by moving each object to a default position and updates the score.
+ */
 void initGame(ref GameState state)
 {
     state.racket[Player.One].reset(Player.One);
