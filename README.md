@@ -3,8 +3,8 @@
 ## Getting started
 First we need to install the lastest D version, by running the commands listed below.
 ```
-wget http://downloads.dlang.org/releases/2.x/2.080.0/dmd_2.080.0-0_amd64.deb
-sudo dpkg --install  dmd_2.080.0-0_amd64.deb 
+wget http://downloads.dlang.org/releases/2.x/2.086.0/dmd_2.086.0-0_amd64.deb
+sudo dpkg --install  dmd_2.086.0-0_amd64.deb 
 ```
 
 We then need to install SDL to be able to run our game:
